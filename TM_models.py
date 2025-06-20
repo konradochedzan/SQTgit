@@ -1,8 +1,5 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-import math
-
 
 class TemporalConvNet(nn.Module):
     """
@@ -39,7 +36,8 @@ class TemporalConvNet(nn.Module):
 
 class TemporalBlock(nn.Module):
     """Individual temporal block for TCN"""
-    def __init__(self, n_inputs, n_outputs, kernel_size, stride, dilation, padding, dropout=0.1):
+    def __init__(self, n_inputs: int, n_outputs: int, kernel_size: int, stride: int, dilation: int,
+                 padding:int, dropout: float = 0.1):
         super(TemporalBlock, self).__init__()
         
         self.conv1 = nn.Conv1d(n_inputs, n_outputs, kernel_size,
@@ -63,6 +61,16 @@ class TemporalBlock(nn.Module):
         self.downsample = nn.Conv1d(n_inputs, n_outputs, 1) if n_inputs != n_outputs else None
         self.relu = nn.ReLU()
 
+        # Weight initialization for stable training
+        self._init_weights()
+
+    def _init_weights(self):
+        for m in self.modules():
+            if isinstance(m, nn.Conv1d):
+                nn.init.kaiming_normal_(m.weight, nonlinearity='relu')
+                if m.bias is not None:
+                    nn.init.zeros_(m.bias)
+
     def forward(self, x):
         out = self.net(x)
         res = x if self.downsample is None else self.downsample(x)
@@ -70,7 +78,7 @@ class TemporalBlock(nn.Module):
 
 class Chomp1d(nn.Module):
     """Remove padding from the end to maintain causality"""
-    def __init__(self, chomp_size):
+    def __init__(self, chomp_size: int):
         super(Chomp1d, self).__init__()
         self.chomp_size = chomp_size
 
