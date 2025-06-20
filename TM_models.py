@@ -1,13 +1,17 @@
 import torch
 import torch.nn as nn
+from typing import List, Optional
 
 class TemporalConvNet(nn.Module):
     """
     Temporal Convolutional Network (TCN) for time series prediction.
     Uses dilated causal convolutions to capture long-range dependencies.
     """
-    def __init__(self, input_dim, num_channels=[64, 128, 64], kernel_size=3, dropout=0.1):
+    def __init__(self, input_dim: int, num_channels: Optional[List[int]] = None, kernel_size: int = 3,
+                 dropout: float = 0.1, pool: str = 'last'):
         super(TemporalConvNet, self).__init__()
+        if num_channels is None:
+            num_channels = [64, 128, 64]
         layers = []
         num_levels = len(num_channels)
         
@@ -24,14 +28,24 @@ class TemporalConvNet(nn.Module):
         
         self.network = nn.Sequential(*layers)
         self.output_layer = nn.Linear(num_channels[-1], 1)
+        self.pool = pool
+
+        # Scale activation to avoid ensure that each new layer begins in a setting where the outputs and gradients do
+        # not vanish or blow up
+        nn.init.xavier_uniform_(self.output_layer.weight)
+        nn.init.xavier_uniform_(self.output_layer.bias)
         
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         # x shape: (batch_size, seq_len, features)
         # TCN expects (batch_size, features, seq_len)
         x = x.transpose(1, 2)
         x = self.network(x)
-        # Take the last time step
-        x = x[:, :, -1]
+        if self.pool == 'avg':
+            # Take average of time steps
+            x = x.mean(dim=2)
+        else:
+            # Take the last time step
+            x = x[:, :, -1]
         return self.output_layer(x)
 
 class TemporalBlock(nn.Module):
@@ -71,7 +85,7 @@ class TemporalBlock(nn.Module):
                 if m.bias is not None:
                     nn.init.zeros_(m.bias)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         out = self.net(x)
         res = x if self.downsample is None else self.downsample(x)
         return self.relu(out + res)
@@ -91,7 +105,8 @@ class TemporalFusionTransformer(nn.Module):
     Simplified Temporal Fusion Transformer implementation.
     Focuses on key components: attention mechanisms and variable selection.
     """
-    def __init__(self, input_dim, hidden_dim=128, num_heads=8, num_layers=2, dropout=0.1):
+    def __init__(self, input_dim: int, hidden_dim: int = 128, num_heads: int = 8, num_layers:int = 2,
+                 dropout: float = 0.1):
         super(TemporalFusionTransformer, self).__init__()
         
         self.input_dim = input_dim
