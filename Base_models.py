@@ -50,44 +50,26 @@ class AutoEncoder(nn.Module):
         return self.encoder(x)
     
 class ElasticNetLoss(nn.Module):
-        """
-        Elastic Net regularisation loss function.
-        This loss function combines L1 and L2 regularisation, controlled by the
-        parameters `alpha` (overall strength) and `l1_ratio` (mixing factor).
-        Parameters
-        ----------
-        model       : the network whose parameters are regularised
-        alpha       : overall strength of the regularisation term
-        l1_ratio    : mixing factor (0 = L2, 1 = L1, 0.5 = Elastic Net)
-        base_loss   : any point-wise loss (defaults to nn.MSELoss())
-        reg_bias    : if False, skips parameters with 1 dimension (bias vectors)
-        """
-        def __init__(self, model,
-                    alpha: float = 1e-3,
-                    l1_ratio: float = 0.5,
-                    base_loss: nn.Module = nn.MSELoss(),
-                    reg_bias: bool = False):
-            super().__init__()
-            self.model = model
-            self.alpha = float(alpha)
-            self.l1_ratio = float(l1_ratio)
-            self.base_loss = base_loss
-            self.reg_bias = reg_bias
+    """
+    Adds an Elastic-Net penalty (α · ( l1_ratio · ‖θ‖₁ + (1-l1_ratio) · ‖θ‖₂² )) to any base loss.
+    """
+    def __init__(self, model, alpha: float = 1e-3, l1_ratio: float = 0.5,
+                 base_loss: nn.Module = nn.MSELoss(), reg_bias: bool = False):
+        super().__init__()
+        self.model, self.alpha, self.l1_ratio = model, alpha, l1_ratio
+        self.base_loss, self.reg_bias = base_loss, reg_bias
 
-        def forward(self, y_pred, y_true):
-            # data-fitting term
-            loss = self.base_loss(y_pred, y_true)
+    def _flat_params(self):
+        for p in self.model.parameters():
+            if self.reg_bias or p.ndim != 1:
+                yield p.view(-1)
 
-            # accumulate parameter norms
-            l1_norm, l2_norm = 0.0, 0.0
-            for p in self.model.parameters():
-                if not self.reg_bias and p.ndim == 1:      # skip bias by default
-                    continue
-                l1_norm += p.abs().sum()
-                l2_norm += p.pow(2).sum()
+    def forward(self, y_hat, y):
+        loss = self.base_loss(y_hat, y)
+        if self.alpha == 0:
+            return loss                      # shortcut
 
-            # combine
-            loss += self.alpha * (
-                self.l1_ratio * l1_norm + (1 - self.l1_ratio) * l2_norm
-            )
-            return loss
+        vec = torch.cat(list(self._flat_params()))
+        l1 = vec.abs().sum()
+        l2 = vec.pow(2).sum()               # squared ℓ₂, same as weight-decay
+        return loss + self.alpha * (self.l1_ratio * l1 + (1 - self.l1_ratio) * l2)

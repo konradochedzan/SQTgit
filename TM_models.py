@@ -46,16 +46,18 @@ class TemporalBlock(nn.Module):
                                stride=stride, padding=padding, dilation=dilation)
         self.chomp1 = Chomp1d(padding)
         self.relu1 = nn.ReLU()
+        self.group_norm1 = nn.GroupNorm(1, n_outputs)  # GroupNorm for better stability
         self.dropout1 = nn.Dropout(dropout)
 
         self.conv2 = nn.Conv1d(n_outputs, n_outputs, kernel_size,
                                stride=stride, padding=padding, dilation=dilation)
         self.chomp2 = Chomp1d(padding)
         self.relu2 = nn.ReLU()
+        self.group_norm2 = nn.GroupNorm(1, n_outputs)
         self.dropout2 = nn.Dropout(dropout)
 
-        self.net = nn.Sequential(self.conv1, self.chomp1, self.relu1, self.dropout1,
-                                 self.conv2, self.chomp2, self.relu2, self.dropout2)
+        self.net = nn.Sequential(self.conv1, self.chomp1, self.relu1, self.group_norm1, self.dropout1,
+                                 self.conv2, self.chomp2, self.relu2, self.group_norm2, self.dropout2)
         
         # Residual connection
         self.downsample = nn.Conv1d(n_inputs, n_outputs, 1) if n_inputs != n_outputs else None
