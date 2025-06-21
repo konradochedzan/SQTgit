@@ -86,7 +86,7 @@ class TemporalConvNet(nn.Module):
         # Scale activation to avoid ensure that each new layer begins in a setting where the outputs and gradients do
         # not vanish or blow up
         nn.init.xavier_uniform_(self.output_layer.weight)
-        nn.init.xavier_uniform_(self.output_layer.bias)
+        nn.init.zeros_(self.output_layer.bias)
         
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # x shape: (batch_size, seq_len, features)
@@ -200,7 +200,7 @@ class TemporalFusionTransformer(nn.Module):
         )
         
     def forward(self, x):
-        batch_size, seq_len, _ = x.shape
+        batch_size, seq_len,_ = x.shape
         
         # Variable selection
         selected_features = self.variable_selection(x)

@@ -6,7 +6,7 @@ import os
 
 from TM_models import TemporalConvNet, TemporalFusionTransformer
 from Simple_models import SimpleFeedForward, SimpleLSTM, SimpleConvolutional, SimpleTransformer
-from tedst import sp500_training_pipeline
+from environment import sp500_training_pipeline
 
 RESULTS_DIR = 'results'
 ARCHITECTURE_RESULTS_FILE = 'architecture_selection_results.csv'

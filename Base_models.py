@@ -73,3 +73,22 @@ class ElasticNetLoss(nn.Module):
         l1 = vec.abs().sum()
         l2 = vec.pow(2).sum()               # squared ℓ₂, same as weight-decay
         return loss + self.alpha * (self.l1_ratio * l1 + (1 - self.l1_ratio) * l2)
+    
+class SharpeRatioLoss(nn.Module):
+    def __init__(self, risk_free_rate=0.0, eps=1e-6):
+        super().__init__()
+        self.risk_free_rate = risk_free_rate
+        self.eps = eps
+
+    def forward(self, predictions, targets):
+        # Position sizing: proportional to predictions (or use tanh(predictions) for bounded leverage)
+        positions = torch.tanh(predictions)
+        # Calculate strategy returns
+        strategy_returns = positions * targets
+        # Excess returns
+        excess_returns = strategy_returns - self.risk_free_rate / 252  # daily rf
+        mean = torch.mean(excess_returns)
+        std = torch.std(excess_returns) + self.eps
+        sharpe = mean / std
+        # Negative Sharpe for minimization
+        return -sharpe
