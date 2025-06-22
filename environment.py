@@ -7,14 +7,83 @@ import pandas as pd
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 import matplotlib.pyplot as plt
-from typing import Dict, List, Tuple, Optional, Union, Any
+from typing import Dict, List, Tuple, Optional, Union, Any, Type
 import warnings
 import random
 from Base_models import FeedForwardPredictor, AutoEncoder, ElasticNetLoss, SharpeRatioLoss
 from TM_models import TemporalConvNet, TemporalFusionTransformer, TemporalFusionTransformer2
-import math
+from Simple_models import SimpleConvolutional, SimpleFeedForward, SimpleLSTM, SimpleTransformer
 import itertools
 warnings.filterwarnings('ignore')
+
+# Fixed parameters for architecture selection
+FIXED_PARAMS = {
+    'window_strategy': 'rolling',
+    'train_window_years': 3,
+    'test_window_years': 1,
+    'use_autoencoder': True,
+    'encoding_dim': 10,
+    'seq_length': 18,
+    'epochs': 20,
+    'lr': 0.0001,
+    'batch_size': 32,
+    'device': 'cpu',
+    'plot_results': False
+}
+
+# Different architectures for each model
+ARCHITECTURE_GRID = {
+    'TCN': {
+        'class': TemporalConvNet,
+        'grid': {
+            'num_channels': [[64, 128, 64], [32, 64, 128, 64, 32], [128, 256, 128]],
+            'pool': ['last']
+        }
+    },
+    'TFT': {
+        'class': TemporalFusionTransformer,
+        'grid': {
+            'hidden_dim': [64, 128],
+            'num_heads': [4, 8],
+            'num_layers': [2, 3],
+            'dropout': [0.1]
+        }
+    },
+    'FeedForward': {
+        'class': SimpleFeedForward,
+        'grid': {
+            'hidden_dim': [200, 512],
+            'dropout': [0.1]
+        }
+    },
+    'LSTM': {
+        'class': SimpleLSTM,
+        'grid': {
+            'hidden_dim': [200, 256],
+            'num_layers': [2, 3],
+            'dropout': [0.1]
+        }
+    },
+    'Transformer': {
+        'class': SimpleTransformer,
+        'grid': {
+            'model_dim': [128, 256],
+            'nhead': [8],
+            'num_layers': [2, 3],
+            'dropout': [0.1],
+            'max_seq_length': [500]
+        }
+    },
+    'CNN': {
+        'class': SimpleConvolutional,
+        'grid': {
+            'num_channels': [[32, 64, 32], [32, 64, 128, 64], [64, 128, 256, 128, 64]],
+            'kernel_size': [5],
+            'dropout': [0.25],
+            'seq_length': [12]
+        }
+    }
+}
 
 def set_seed(seed=42):
     torch.manual_seed(seed)
@@ -568,8 +637,10 @@ def hyperparameter_tuning(
     device: str = 'cpu',
 ) -> Dict[str, Any]:
     """Hyperparameter tuning for S&P-500 forecasting models."""
-    if model_type.lower() not in ['feedforward', 'lstm', 'transformer', 'simpleconvolutional']:
-        raise ValueError(f"Unsupported model type: {model_type}. Supported types are 'feedforward', 'lstm', 'transformer', 'simpleconvolutional'.")
+    if model_type.lower() not in ['feedforward', 'lstm', 'transformer', 'simpleconvolutional',
+                                  'temporalfusiontransformer', 'tempconvnet']:
+        raise ValueError(f"Unsupported model type: {model_type}. Supported types are 'feedforward', 'lstm',"
+                         f" 'transformer', 'simpleconvolutional'.")
     if model_type.lower() == 'feedforward':
         parameter_grid = {
             'use_autoencoder': [True],
@@ -751,3 +822,97 @@ def hyperparameter_tuning(
         'best_mse': best_mse,
         'all_results': all_results
     }
+
+def select_best_architectures(
+        X: np.ndarray,
+        y: np.ndarray,
+        dates: pd.DatetimeIndex,
+        tbill3m: np.ndarray,
+) -> pd.DataFrame:
+    """Find best architecture for each model"""
+    results = []
+    for model_type, cfg in ARCHITECTURE_GRID.items():
+        model_class = cfg['class']
+        grid = cfg['grid']
+
+        best_mse = float('inf')
+        best_params = None
+        best_metrics = None
+
+        for combo in itertools.product(*grid.values()):
+            params = dict(zip(grid.keys(), combo))
+            res = sp500_training_pipeline(
+                X=X,
+                y=y,
+                dates=dates,
+                model_class=model_class,
+                model_kwargs=params,
+                model_type = model_type.lower(),
+                tbill3m = tbill3m,
+                **FIXED_PARAMS
+            )
+            mse = res['overall_metrics']['avg_test_mse']
+
+            if mse < best_mse:
+                best_mse = mse
+                best_params = params
+                best_metrics = res['overall_metrics']
+
+        results.append({
+            'model_type': model_type,
+            'best_params': best_params,
+            'best_mse': best_mse,
+            **{f'avg_test_{k}': v for k, v in best_metrics.items() if k.startswith('avg_test_')},
+            **{f'std_test_{k}': v for k, v in best_metrics.items() if k.startswith('std_test_')}
+        })
+        print(f"{model_type:12} → MSE: {best_mse:.6f}, params: {best_params}")
+
+    return pd.DataFrame(results)
+
+def prepare_for_tuning(df_best_arch: pd.DataFrame) -> List[Tuple[Type, str, Dict[str, Any]]]:
+    """Convert best architectures dataframe into a list of tuples"""
+    out = []
+    for _, row in df_best_arch.iterrows():
+        model_type = row['model_type']
+        model_class = ARCHITECTURE_GRID[model_type]['class']
+        params = row['best_params']
+        out.append((model_class, model_type.lower(), params))
+    return out
+
+def train_final_models(
+        X: np.ndarray,
+        y: np.ndarray,
+        dates: pd.DatetimeIndex,
+        tbill3m: np.ndarray,
+        to_tune: List[Tuple[Type, str, Dict[str, Any]]],
+        tuning_results: List[Dict[str, Any]]
+) -> List[Tuple[str, Any]]:
+    """Train each model on the full dataset using its best architecture and hyperparameters"""
+    trained_models = []
+    for (model_class, model_type, arch_params), tune_res in zip(to_tune, tuning_results):
+        print(f'Training final model {model_type}')
+        best_hyperparams = tune_res['best_params']
+        model_kwargs = {**arch_params, **{k: v for k, v in best_hyperparams.items() if k in arch_params}}
+        final_model = sp500_training_pipeline(
+            X=X,
+            y=y,
+            dates=dates,
+            tbill3m=tbill3m,
+            model_class=model_class,
+            model_type=model_type,
+            model_kwargs=model_kwargs,
+            window_strategy='expanding',
+            train_window_years=3,
+            test_window_years=0,
+            device='cpu',
+            plot_results=True,
+            do_print=True
+            **best_hyperparams
+        )['trained_model']
+        trained_models.append((model_type, final_model))
+
+    return trained_models
+        
+        
+
+

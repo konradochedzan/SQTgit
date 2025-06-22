@@ -200,7 +200,7 @@ class TemporalFusionTransformer(nn.Module):
         )
         
     def forward(self, x):
-        batch_size, seq_len,_ = x.shape
+        batch_size, seq_len = x.shape
         
         # Variable selection
         selected_features = self.variable_selection(x)
@@ -362,8 +362,13 @@ class VariableSelectionNetwork(nn.Module):
         )
         
     def forward(self, x):
-        batch_size, seq_len, input_dim = x.shape
-        
+        if x.dim() == 2:
+            batch_size, input_dim = x.shape
+            seq_len = 1
+            x = x.unsqueeze(1)
+        else:
+            batch_size, seq_len, input_dim = x.shape
+
         # Flatten for weight computation
         x_flat = x.view(-1, input_dim)
         
