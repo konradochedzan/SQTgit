@@ -865,7 +865,7 @@ def select_best_architectures(
             **{f'avg_test_{k}': v for k, v in best_metrics.items() if k.startswith('avg_test_')},
             **{f'std_test_{k}': v for k, v in best_metrics.items() if k.startswith('std_test_')}
         })
-        print(f"{model_type:12} → MSE: {best_mse:.6f}, params: {best_params}")
+        print(f'{model_type:12} → MSE: {best_mse:.6f}, params: {best_params}')
 
     return pd.DataFrame(results)
 

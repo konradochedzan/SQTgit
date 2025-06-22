@@ -1,6 +1,5 @@
 import os
 import pickle
-
 import pandas as pd
 import numpy as np
 
@@ -21,14 +20,14 @@ df.rename(columns={'Unnamed: 0': 'Date'}, inplace=True)
 features = df.drop(columns=['returns', 'Date']).values.astype(np.float32)
 target = df['returns'].values.astype(np.float32)
 dates = pd.to_datetime(df['Date'])
-tbill3m = df["tbill3m"].values.astype(np.float32)
+tbill3m = df['tbill3m'].values.astype(np.float32)
 
 
 print('Running architecture selection')
 arch_path = os.path.join(RESULTS_DIR, ARCHITECTURE_RESULTS_FILE)
 if os.path.exists(arch_path):
     dr_arch = pd.read_csv(arch_path)
-    print("Loaded existing architecture results.")
+    print('Loaded existing architecture results.')
 else:
     df_arch = select_best_architectures(
         X=features,
@@ -45,7 +44,7 @@ hyperparam_path_pickle = os.path.join(RESULTS_DIR, HYPERPARAM_RESULTS_FILE_PICKL
 if os.path.exists(hyperparam_path_csv):
     with open(hyperparam_path_pickle, 'rb') as f: tuning_results = pickle.load(f)
     df_tuned = pd.read_csv(os.path.join(RESULTS_DIR,HYPERPARAM_RESULTS_FILE_CSV))
-    print("Loaded existing hyperparameter tuning results.")
+    print('Loaded existing hyperparameter tuning results.')
 else:
     to_tune = prepare_for_tuning(df_arch)
     tuning_results = []
@@ -67,16 +66,23 @@ else:
     df_tuned.to_csv(hyperparam_path_csv, index=False)
     with open(hyperparam_path_pickle, 'wb') as f:
         pickle.dump(tuning_results, f)
-    print(f"Saved hyperparameter tuning results to {HYPERPARAM_RESULTS_FILE_CSV} and {HYPERPARAM_RESULTS_FILE_PICKLE}.")
+    print(f'Saved hyperparameter tuning results to {HYPERPARAM_RESULTS_FILE_CSV} and {HYPERPARAM_RESULTS_FILE_PICKLE}.')
 
 final_pickle_path = os.path.join(RESULTS_DIR, FINAL_PICKLE)
-
-trained_models = train_final_models(
-    X=features,
-    y=target,
-    dates=dates,
-    tbill3m=tbill3m,
-    to_tune=to_tune,
-    tuning_results=tuning_results
-)
+if os.path.exists(final_pickle_path):
+    with open(final_pickle_path, 'rb') as f: trained_models = pickle.load(f)
+    print('Loaded existing final trained models.')
+else:
+    to_tune = prepare_for_tuning(df_arch)
+    trained_models = train_final_models(
+        X=features,
+        y=target,
+        dates=dates,
+        tbill3m=tbill3m,
+        to_tune=to_tune,
+        tuning_results=tuning_results
+    )
+    with open(final_pickle_path, 'wb') as f:
+        pickle.dump(trained_models, f)
+    print(f'Saved final trained models to {final_pickle_path}')
 
