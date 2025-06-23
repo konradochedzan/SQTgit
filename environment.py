@@ -27,12 +27,13 @@ FIXED_PARAMS = {
     'test_window_years': 1,
     'use_autoencoder': True,
     'encoding_dim': 10,
-    'seq_length': 18,
+    'seq_length': 24,
     'epochs': 60,
     'lr': 0.0001,
-    'batch_size': 32,
-    'device': 'cpu',
-    'plot_results': False
+    'batch_size': 128,
+    'device': 'cuda',
+    'plot_results': False,
+    'do_print': True
 }
 
 # Different architectures for each model
@@ -129,7 +130,7 @@ def train_autoencoder(X_train: np.ndarray, encoding_dim: int, epochs: int = 100,
     """Train autoencoder on training data only"""
     input_dim = X_train.shape[1]
     autoencoder = AutoEncoder(input_dim, encoding_dim).to(device)
-    criterion = nn.MSELoss()
+    criterion =nn.MSELoss()
     optimizer = optim.Adam(autoencoder.parameters(), lr=lr)
     
     X_tensor = torch.FloatTensor(X_train).to(device)
@@ -276,6 +277,20 @@ def prepare_data_for_model(
     return torch.FloatTensor(np.asarray(X_ff)), torch.FloatTensor(np.asarray(y_ff))
 
 
+def improved_position_sizing(predictions, volatility_scaling=True, max_position=1.0):
+    if volatility_scaling:
+        pred_vol = np.std(predictions[-20:]) if len(predictions) >= 20 else np.std(predictions)
+        if pred_vol > 0:
+            scaled_predictions = predictions / (2 * pred_vol)
+        else:
+            scaled_predictions = predictions
+    else:
+        scaled_predictions = predictions
+
+    positions = np.tanh(scaled_predictions) * max_position
+    return positions
+
+
 def sp500_training_pipeline(
     X: np.ndarray,
     y: np.ndarray,
@@ -385,6 +400,7 @@ def sp500_training_pipeline(
         input_dim = X_train_tensor.shape[-1]
         model     = model_class(input_dim=input_dim, **model_kwargs).to(device)
         criterion = ElasticNetLoss(model=model, alpha=alpha, l1_ratio=l1_ratio)
+        # criterion = FinancialLoss(mse_weight=1.0, sharpe_weight=0.2, directional_weight=0.3)
     #         criterion = lambda predictions, targets: (
     #     SharpeRatioLoss(risk_free_rate=np.mean(tbill3m[train_mask]))(predictions, targets)
     #     + 5*nn.MSELoss()(predictions, targets)
@@ -418,8 +434,11 @@ def sp500_training_pipeline(
         train_r2  = r2_score(train_targets, train_predictions)
         test_r2   = r2_score(test_targets,  test_predictions)
 
-        train_positions = np.tanh(train_predictions)
-        test_positions  = np.tanh(test_predictions)
+        # train_positions = np.tanh(train_predictions)
+        # test_positions  = np.tanh(test_predictions)
+
+        train_positions = improved_position_sizing(train_predictions, volatility_scaling=True)
+        test_positions = improved_position_sizing(test_predictions, volatility_scaling=True)
 
         train_strategy_returns = train_positions * train_targets
         test_strategy_returns  = test_positions  * test_targets
@@ -1003,6 +1022,6 @@ def compare_models(trained_models: List[Tuple[str, Any, Dict[str, Any]]],
     plt.suptitle('Pairwise metric scatter matrix')
     plt.tight_layout()
     plt.savefig(os.path.join(results_dir, 'metric_scatter_matrix.png'))
-    png.close()
+    plt.close()
 
     return summary_df, comparisons
