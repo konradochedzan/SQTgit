@@ -11,8 +11,10 @@ BEST_ARCHITECTURES_FILE = 'best_architectures.csv'
 HYPERPARAM_RESULTS_FILE_CSV = 'hyperparam_results.csv'
 HYPERPARAM_RESULTS_FILE_PICKLE = 'hyperparam_results.pickle'
 FINAL_PICKLE = 'final_models.pickle'
+MODELS_DIR = os.path.join(RESULTS_DIR, 'models')
 
 os.makedirs(RESULTS_DIR, exist_ok=True)
+os.makedirs(MODELS_DIR, exist_ok=True)
 
 
 df = pd.read_csv('data_non_std.csv', parse_dates=['Unnamed: 0'])
@@ -80,9 +82,9 @@ else:
         dates=dates,
         tbill3m=tbill3m,
         to_tune=to_tune,
-        tuning_results=tuning_results
+        tuning_results=tuning_results,
+        final_pickle_path=final_pickle_path,
+        models_dir = MODELS_DIR
     )
-    with open(final_pickle_path, 'wb') as f:
-        pickle.dump(trained_models, f)
-    print(f'Saved final trained models to {final_pickle_path}')
+    print(f'Trained and saved final models and metrics')
 

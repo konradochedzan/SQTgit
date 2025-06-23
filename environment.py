@@ -1,3 +1,6 @@
+import os
+import pickle
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -885,15 +888,17 @@ def train_final_models(
         dates: pd.DatetimeIndex,
         tbill3m: np.ndarray,
         to_tune: List[Tuple[Type, str, Dict[str, Any]]],
-        tuning_results: List[Dict[str, Any]]
-) -> List[Tuple[str, Any]]:
+        tuning_results: List[Dict[str, Any]],
+        final_pickle_path: str,
+        models_dir: str
+) -> List[Tuple[str, Any, Dict[str, Any]]]:
     """Train each model on the full dataset using its best architecture and hyperparameters"""
     trained_models = []
     for (model_class, model_type, arch_params), tune_res in zip(to_tune, tuning_results):
         print(f'Training final model {model_type}')
         best_hyperparams = tune_res['best_params']
         model_kwargs = {**arch_params, **{k: v for k, v in best_hyperparams.items() if k in arch_params}}
-        final_model = sp500_training_pipeline(
+        result = sp500_training_pipeline(
             X=X,
             y=y,
             dates=dates,
@@ -908,9 +913,17 @@ def train_final_models(
             plot_results=True,
             do_print=True
             **best_hyperparams
-        )['trained_model']
-        trained_models.append((model_type, final_model))
+        )
+        model = result['model']
+        metrics = result['overall_metrics']
+        model_path = os.path.join(models_dir, f'{model_type}.pt')
+        torch.save(model.state_dict() if hasattr(model, 'state_dict') else model, model_path)
+        print(f'Saved final model {model_type} to {model_path}')
+        trained_models.append((model_type, model, metrics))
 
+    with open(final_pickle_path, 'wb') as f:
+        pickle.dump(trained_models, f)
+    print(f'Saved all final models and metrics list to {final_pickle_path}')
     return trained_models
         
         
