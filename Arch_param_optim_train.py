@@ -3,7 +3,8 @@ import pickle
 import pandas as pd
 import numpy as np
 
-from environment import select_best_architectures, prepare_for_tuning, hyperparameter_tuning, train_final_models
+from environment import (select_best_architectures, prepare_for_tuning, hyperparameter_tuning, train_final_models,
+                         compare_models)
 
 RESULTS_DIR = 'results'
 ARCHITECTURE_RESULTS_FILE = 'architecture_results.csv'
@@ -88,3 +89,9 @@ else:
     )
     print(f'Trained and saved final models and metrics')
 
+summary_df, test_results = compare_models(
+    trained_models=trained_models,
+    results_dir=RESULTS_DIR
+)
+print(summary_df)
+print(test_results)

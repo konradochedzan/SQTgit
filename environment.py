@@ -7,6 +7,7 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
 import numpy as np
 import pandas as pd
+from scipy import stats
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 import matplotlib.pyplot as plt
@@ -27,7 +28,7 @@ FIXED_PARAMS = {
     'use_autoencoder': True,
     'encoding_dim': 10,
     'seq_length': 18,
-    'epochs': 20,
+    'epochs': 60,
     'lr': 0.0001,
     'batch_size': 32,
     'device': 'cpu',
@@ -926,6 +927,82 @@ def train_final_models(
     print(f'Saved all final models and metrics list to {final_pickle_path}')
     return trained_models
         
-        
+def compare_models(trained_models: List[Tuple[str, Any, Dict[str, Any]]],
+                   results_dir: str) -> Tuple[pd.DataFrame, Dict[str, float]]:
+    """Perform statistical tests on trained models"""
+    summary_df = pd.DataFrame([
+        {
+            'model': model_type,
+            'sharpe': model['avg_test_sharpe'],
+            'mse': model['avg_test_mse'],
+            'sortino': model['avg_test_sortino'],
+            'hit_rate': model['avg_test_hit']
+        }
+        for model_type, _, model in trained_models
+    ])
+    summary_df.set_index('model', inplace=True)
 
+    comparisons = {}
+    # Rank models by each metric
+    comparisons['rankings'] = {metric: summary_df[metric].sort_values(ascending=(metric != 'Sharpe')).index.tolist() for metric in summary_df.columns}
+    percentage_improvement = {}
+    # Compute percentage improvement of best vs second best model for each metric
+    for metric in summary_df.columns:
+        values = summary_df[metric]
+        if metric == 'sharpe':
+            best, second = values.nlargest(2).values
+            pct = (second - best) / abs(second) * 100
+        else:
+            best, second = values.nsmallest(2).values
+            pct = (second -  best) / abs(second) * 100
 
+        percentage_improvement[metric] = pct
+    comparisons['percentage_improvement'] = percentage_improvement
+
+    # Statistical tests
+    stats_res = {}
+    # Paired t-test on Sharpe between best two models: tests whether the mean Sharpe ratios for the two models are
+    # significantly different
+    sharpe_values = summary_df['Sharpe'].values
+    if len(sharpe_values) >= 2:
+        top2 = np.argsort(-sharpe_values)[:2]
+        t_stat, p_value = stats.ttest_rel(sharpe_values[top2[0]], sharpe_values[top2[1]])
+        stats_res['paired_t_sharpe'] = p_value
+    # ANOVA on mse across all models: tests whether the mean mse across models are significantly different
+    mse_values = summary_df['MSE'].values
+    if len(mse_values) >= 3:
+        f_stat_, p_value = stats.f_oneway(*[[v] for v in mse_values])
+        stats_res['anova_mse'] = p_value
+    # Kruskal-Wallis test on Sortino ratio: tests whether the mean Sortino ratios across models are
+    # significantly different
+    sortino_values = summary_df['Sortino'].values
+    if len(sortino_values) >= 3:
+        h_stat_, p_value = stats.kruskal(*[[v] for v in sortino_values])
+        stats_res['kruskal_sortino'] = p_value
+    # Friedman test on hit rate: tests whether the median hit rates across models are
+    # significantly different
+    hit_values = summary_df['HitRate'].values
+    if len(hit_values) >= 2:
+        chi2, p_value = stats.friedmanchisquare(*[[v] for v in hit_values])
+        stats_res['friedman_hitrate'] = p_value
+
+    comparisons['stats_res'] = stats_res
+
+    # Plots
+    for metric in summary_df.columns:
+        plt.figure()
+        summary_df[metric].plot(kind='bar', title=f'{metric} by model')
+        plt.ylabel(metric)
+        plt.tight_layout()
+        plt.savefig(os.path.join(results_dir, f'{metric.lower()}_bar.png'))
+        plt.close()
+
+    # Scatter matrix of metrics
+    plt.figure()
+    pd.plotting.scatter_matrix(summary_df, diagonal='kde', alpha=0.7)
+    plt.suptitle('Pairwise metric scatter matrix')
+    plt.tight_layout()
+    plt.savefig(os.path.join(results_dir, 'metric_scatter_matrix.png'))
+    png.close()
+
+    return summary_df, comparisons
