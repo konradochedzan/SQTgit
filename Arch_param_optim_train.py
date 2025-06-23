@@ -32,6 +32,7 @@ if os.path.exists(arch_path):
     dr_arch = pd.read_csv(arch_path)
     print('Loaded existing architecture results.')
 else:
+    print('Selecting best architectures...')
     df_arch = select_best_architectures(
         X=features,
         y=target,

@@ -28,7 +28,7 @@ FIXED_PARAMS = {
     'use_autoencoder': True,
     'encoding_dim': 10,
     'seq_length': 24,
-    'epochs': 60,
+    'epochs': 1,
     'lr': 0.0001,
     'batch_size': 128,
     'device': 'cuda',
@@ -41,15 +41,16 @@ ARCHITECTURE_GRID = {
     'TCN': {
         'class': TemporalConvNet,
         'grid': {
-            'num_channels': [[64, 128, 64], [32, 64, 128, 64, 32], [128, 256, 128]],
+            'num_channels': [[32, 64, 32], [32, 48, 64, 48, 32], [48, 64, 48]],
+            'kernel_size': [5],
+            'dropout': [0.1],
             'pool': ['last']
         }
     },
-    'TFT': {
-        'class': TemporalFusionTransformer,
+    'LSTM': {
+        'class': SimpleLSTM,
         'grid': {
-            'hidden_dim': [64, 128],
-            'num_heads': [4, 8],
+            'hidden_dim': [10, 200, 256],
             'num_layers': [2, 3],
             'dropout': [0.1]
         }
@@ -57,14 +58,15 @@ ARCHITECTURE_GRID = {
     'FeedForward': {
         'class': SimpleFeedForward,
         'grid': {
-            'hidden_dim': [200, 512],
+            'hidden_dim': [100,200,300],
             'dropout': [0.1]
         }
     },
-    'LSTM': {
-        'class': SimpleLSTM,
+    'TFT': {
+        'class': TemporalFusionTransformer,
         'grid': {
-            'hidden_dim': [200, 256],
+            'hidden_dim': [64, 128],
+            'num_heads': [4, 8],
             'num_layers': [2, 3],
             'dropout': [0.1]
         }
@@ -82,10 +84,10 @@ ARCHITECTURE_GRID = {
     'CNN': {
         'class': SimpleConvolutional,
         'grid': {
-            'num_channels': [[32, 64, 32], [32, 64, 128, 64], [64, 128, 256, 128, 64]],
+            'num_channels': [[32, 64, 32], [32, 64, 64, 32], [32, 64, 128, 64, 32]],
             'kernel_size': [5],
-            'dropout': [0.25],
-            'seq_length': [12]
+            'dropout': [0.1],
+            'seq_length': [24]
         }
     }
 }
@@ -130,7 +132,7 @@ def train_autoencoder(X_train: np.ndarray, encoding_dim: int, epochs: int = 100,
     """Train autoencoder on training data only"""
     input_dim = X_train.shape[1]
     autoencoder = AutoEncoder(input_dim, encoding_dim).to(device)
-    criterion =nn.MSELoss()
+    criterion = nn.MSELoss()
     optimizer = optim.Adam(autoencoder.parameters(), lr=lr)
     
     X_tensor = torch.FloatTensor(X_train).to(device)
@@ -311,9 +313,9 @@ def sp500_training_pipeline(
     epochs: int = 100,
     lr: float = 0.001,
     batch_size: int = 32,
-    alpha: float = 0.1,
-    l1_ratio: float = 0.5,
-    device: str = 'cpu',
+    alpha: float = 0,
+    l1_ratio: float = 0,
+    device: str = 'cuda' if torch.cuda.is_available() else 'cpu',
     random_seed: int = 42,
     plot_results: bool = True,
     do_print = True
@@ -400,7 +402,6 @@ def sp500_training_pipeline(
         input_dim = X_train_tensor.shape[-1]
         model     = model_class(input_dim=input_dim, **model_kwargs).to(device)
         criterion = ElasticNetLoss(model=model, alpha=alpha, l1_ratio=l1_ratio)
-        # criterion = FinancialLoss(mse_weight=1.0, sharpe_weight=0.2, directional_weight=0.3)
     #         criterion = lambda predictions, targets: (
     #     SharpeRatioLoss(risk_free_rate=np.mean(tbill3m[train_mask]))(predictions, targets)
     #     + 5*nn.MSELoss()(predictions, targets)
@@ -855,6 +856,7 @@ def select_best_architectures(
     """Find best architecture for each model"""
     results = []
     for model_type, cfg in ARCHITECTURE_GRID.items():
+        print(f'Tuning {model_type} architecture...')
         model_class = cfg['class']
         grid = cfg['grid']
 
@@ -864,6 +866,7 @@ def select_best_architectures(
 
         for combo in itertools.product(*grid.values()):
             params = dict(zip(grid.keys(), combo))
+            print(f'Testing params: {params}')
             res = sp500_training_pipeline(
                 X=X,
                 y=y,
@@ -874,8 +877,9 @@ def select_best_architectures(
                 tbill3m = tbill3m,
                 **FIXED_PARAMS
             )
-            mse = res['overall_metrics']['avg_test_mse']
 
+            mse = res['overall_metrics']['avg_test_mse']
+            print(f'  MSE: {mse:.6f}')
             if mse < best_mse:
                 best_mse = mse
                 best_params = params
