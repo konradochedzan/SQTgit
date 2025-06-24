@@ -1,3 +1,4 @@
+import datetime
 import os
 import pickle
 
@@ -28,7 +29,7 @@ FIXED_PARAMS = {
     'use_autoencoder': True,
     'encoding_dim': 10,
     'seq_length': 24,
-    'epochs': 1,
+    'epochs': 120,
     'lr': 0.0001,
     'batch_size': 128,
     'device': 'cuda',
@@ -434,9 +435,6 @@ def sp500_training_pipeline(
         test_mae  = mean_absolute_error(test_targets,  test_predictions)
         train_r2  = r2_score(train_targets, train_predictions)
         test_r2   = r2_score(test_targets,  test_predictions)
-
-        # train_positions = np.tanh(train_predictions)
-        # test_positions  = np.tanh(test_predictions)
 
         train_positions = improved_position_sizing(train_predictions, volatility_scaling=True)
         test_positions = improved_position_sizing(test_predictions, volatility_scaling=True)
@@ -852,6 +850,8 @@ def select_best_architectures(
         y: np.ndarray,
         dates: pd.DatetimeIndex,
         tbill3m: np.ndarray,
+        results_dir :str
+        file_path: str = 'best_architectures.pickle',
 ) -> pd.DataFrame:
     """Find best architecture for each model"""
     results = []
@@ -859,40 +859,73 @@ def select_best_architectures(
         print(f'Tuning {model_type} architecture...')
         model_class = cfg['class']
         grid = cfg['grid']
+        print(f'Running architecture selection for model {model_type}')
 
         best_mse = float('inf')
         best_params = None
         best_metrics = None
+        errors = []
 
         for combo in itertools.product(*grid.values()):
             params = dict(zip(grid.keys(), combo))
             print(f'Testing params: {params}')
-            res = sp500_training_pipeline(
-                X=X,
-                y=y,
-                dates=dates,
-                model_class=model_class,
-                model_kwargs=params,
-                model_type = model_type.lower(),
-                tbill3m = tbill3m,
-                **FIXED_PARAMS
-            )
+            try:
+                res = sp500_training_pipeline(
+                    X=X,
+                    y=y,
+                    dates=dates,
+                    model_class=model_class,
+                    model_kwargs=params,
+                    model_type = model_type.lower(),
+                    tbill3m = tbill3m,
+                    **FIXED_PARAMS
+                )
 
-            mse = res['overall_metrics']['avg_test_mse']
-            print(f'  MSE: {mse:.6f}')
-            if mse < best_mse:
-                best_mse = mse
-                best_params = params
-                best_metrics = res['overall_metrics']
+                mse = res['overall_metrics']['avg_test_mse']
+                print(f'  MSE: {mse:.6f}')
+                if mse < best_mse:
+                    best_mse = mse
+                    best_params = params
+                    best_metrics = res['overall_metrics']
 
-        results.append({
+            except Exception as e:
+                error = str(e)
+                print(f'Error with params {params}: {error}')
+                errors.append({'params': params, 'error': error})
+
+
+
+        row = {
             'model_type': model_type,
             'best_params': best_params,
-            'best_mse': best_mse,
-            **{f'avg_test_{k}': v for k, v in best_metrics.items() if k.startswith('avg_test_')},
-            **{f'std_test_{k}': v for k, v in best_metrics.items() if k.startswith('std_test_')}
-        })
-        print(f'{model_type:12} → MSE: {best_mse:.6f}, params: {best_params}')
+            'best_mse': None if best_params is None else best_mse,
+            'errors': errors
+        }
+        if best_metrics is not None and best_params is not None:
+            filtered = {
+                k: v
+                for k, v in best_metrics.items()
+                if k.startswith('avg_test_') or k.startswith('std_test_')
+            }
+            row.update(filtered)
+
+        results.append(row)
+        save_data = {
+            'last_updated': datetime.datetime.now().isoformat(),
+            'total_models': len(ARCHITECTURE_GRID),
+            'completed_models': len(results),
+            'results': results
+        }
+        try:
+            with open(file_path, 'wb') as f:
+                pickle.dump(save_data, f)
+            print(f'Progress saved to {file_path}')
+        except Exception as e:
+            print(f'Warning: Could not save progress: {e}')
+        if row['best_mse'] is not None:
+            print(f'{model_type:12} → MSE: {best_mse:.6f}, params: {best_params}')
+        else:
+            print('Test failed')
 
     return pd.DataFrame(results)
 

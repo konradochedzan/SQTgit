@@ -37,7 +37,8 @@ else:
         X=features,
         y=target,
         dates=dates,
-        tbill3m=tbill3m
+        tbill3m=tbill3m,
+        results_dir=RESULTS_DIR
     )
     df_arch.to_csv(arch_path, index=False)
     print(f'Saved architecture results to {arch_path}')
