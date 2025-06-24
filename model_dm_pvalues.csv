@@ -1,0 +1,7 @@
+,cnn,feedforward,lstm,temporalconvnet,temporalfusiontransformer,transformer
+cnn,1.0,0.0,0.0,0.0,0.0,0.0
+feedforward,0.0,1.0,0.0,0.0,0.0,0.0
+lstm,0.0,0.0,1.0,0.0,0.0,0.0
+temporalconvnet,0.0,0.0,0.0,1.0,0.0,0.0
+temporalfusiontransformer,0.0,0.0,0.0,0.0,1.0,0.0
+transformer,0.0,0.0,0.0,0.0,0.0,1.0

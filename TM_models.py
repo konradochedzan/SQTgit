@@ -200,7 +200,7 @@ class TemporalFusionTransformer(nn.Module):
         )
         
     def forward(self, x):
-        batch_size, seq_len = x.shape
+        batch_size, seq_len, input_dim = x.shape
         
         # Variable selection
         selected_features = self.variable_selection(x)
