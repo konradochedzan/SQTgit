@@ -560,9 +560,16 @@ def sp500_training_pipeline(
             print(f"Average Train Hit Rate: {results['overall_metrics']['avg_train_hit']:.2%} ± {results['overall_metrics']['std_train_hit']:.2%}")
             print(f"Average Test Hit Rate: {results['overall_metrics']['avg_test_hit']:.2%} ± {results['overall_metrics']['std_test_hit']:.2%}")
 
-    
+
     # Plotting
     if plot_results and fold_predictions:
+        plot_dir = Path("results_plots") 
+        plot_dir.mkdir(parents=True, exist_ok=True)
+        plot_suffix = (
+            f"{model_type}_"
+            f"{window_strategy}-{train_window_years}tr{test_window_years}te_"
+            f"{'AE' if use_autoencoder else 'NoAE'}"
+        )
         n_plots = len(fold_predictions)
         fig, axes = plt.subplots(n_plots, 1, figsize=(15, 4 * n_plots))
         if n_plots == 1:
@@ -593,7 +600,7 @@ def sp500_training_pipeline(
             ax.grid(True, alpha=0.3)
         
         plt.tight_layout()
-        plt.savefig(os.path.join(plot_dir, "folds_predictions_vs_actual.png")) 
+        plt.savefig(plot_dir / f"{plot_suffix}_folds_predictions_vs_actual.png")
         if plt_show:
             plt.show()
         
@@ -648,7 +655,7 @@ def sp500_training_pipeline(
             plt.grid(True, alpha=0.3)
             plt.xticks(rotation=45)
             plt.tight_layout()
-            plt.savefig(os.path.join(plot_dir, "overall_performance.png"))
+            plt.savefig(plot_dir / f"{plot_suffix}_overall_performance.png")
             if plt_show:
                 plt.show()
     
