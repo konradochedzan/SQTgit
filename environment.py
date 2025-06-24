@@ -1,6 +1,7 @@
 import datetime
 import os
 import pickle
+from pathlib import Path
 
 import torch
 import torch.nn as nn
@@ -18,6 +19,7 @@ import random
 from Base_models import FeedForwardPredictor, AutoEncoder, ElasticNetLoss, SharpeRatioLoss
 from TM_models import TemporalConvNet, TemporalFusionTransformer, TemporalFusionTransformer2
 from Simple_models import SimpleConvolutional, SimpleFeedForward, SimpleLSTM, SimpleTransformer
+from saving import save_model, save_predictions
 import itertools
 warnings.filterwarnings('ignore')
 import joblib
@@ -34,7 +36,7 @@ FIXED_PARAMS = {
     'batch_size': 128,
     'device': 'cuda',
     'plot_results': False,
-    'do_print': True
+    'do_print': False
 }
 
 # Different architectures for each model
@@ -850,11 +852,18 @@ def select_best_architectures(
         y: np.ndarray,
         dates: pd.DatetimeIndex,
         tbill3m: np.ndarray,
-        results_dir :str,
         file_path: str = 'best_architectures.pickle'
 ) -> pd.DataFrame:
     """Find best architecture for each model"""
     results = []
+    if FIXED_PARAMS['use_autoencoder']:
+        out_dir_models = Path('model_autoencoder_on')
+        print('Autoencoder turned on')
+    else:
+        out_dir_models = Path('model_autoencoder_off')
+        print('Autoencoder turned off')
+    out_dir_models.mkdir(parents=True, exist_ok=True)
+
     for model_type, cfg in ARCHITECTURE_GRID.items():
         print(f'Tuning {model_type} architecture...')
         model_class = cfg['class']
@@ -864,6 +873,9 @@ def select_best_architectures(
         best_mse = float('inf')
         best_params = None
         best_metrics = None
+        best_models = None
+        best_dates = None
+        best_predictions = None
         errors = []
 
         for combo in itertools.product(*grid.values()):
@@ -887,6 +899,10 @@ def select_best_architectures(
                     best_mse = mse
                     best_params = params
                     best_metrics = res['overall_metrics']
+                    best_models = res['models']
+                    best_dates = res['all_test_dates']
+                    best_predictions = res['all_test_predictions']
+
 
             except Exception as e:
                 error = str(e)
@@ -910,24 +926,22 @@ def select_best_architectures(
             row.update(filtered)
 
         results.append(row)
-        save_data = {
-            'last_updated': datetime.datetime.now().isoformat(),
-            'total_models': len(ARCHITECTURE_GRID),
-            'completed_models': len(results),
-            'results': results
-        }
-        try:
-            with open(file_path, 'wb') as f:
-                pickle.dump(save_data, f)
-            print(f'Progress saved to {file_path}')
-        except Exception as e:
-            print(f'Warning: Could not save progress: {e}')
-        if row['best_mse'] is not None:
-            print(f'{model_type:12} → MSE: {best_mse:.6f}, params: {best_params}')
-        else:
-            print('Test failed')
 
-    return pd.DataFrame(results)
+        if best_params is not None:
+            for k, fold_model in enumerate(best_models, 1):
+                fname = out_dir_models / f'{model_type}_best_fold_{k:02d}.joblib'
+                save_model(fold_model, fname)
+            save_predictions(
+                dates=best_dates,
+                predictions=best_predictions,
+                csv_path=out_dir_models / f'{model_type}_best_predictions.csv'
+            )
+
+    results_df = pd.DataFrame(results)
+    with open(file_path, 'wb') as f:
+        pickle.dump(results_df, f)
+
+    return results_df
 
 def prepare_for_tuning(df_best_arch: pd.DataFrame) -> List[Tuple[Type, str, Dict[str, Any]]]:
     """Convert best architectures dataframe into a list of tuples"""
@@ -982,83 +996,112 @@ def train_final_models(
         pickle.dump(trained_models, f)
     print(f'Saved all final models and metrics list to {final_pickle_path}')
     return trained_models
-        
-def compare_models(trained_models: List[Tuple[str, Any, Dict[str, Any]]],
-                   results_dir: str) -> Tuple[pd.DataFrame, Dict[str, float]]:
-    """Perform statistical tests on trained models"""
-    summary_df = pd.DataFrame([
-        {
-            'model': model_type,
-            'sharpe': model['avg_test_sharpe'],
-            'mse': model['avg_test_mse'],
-            'sortino': model['avg_test_sortino'],
-            'hit_rate': model['avg_test_hit']
-        }
-        for model_type, _, model in trained_models
-    ])
-    summary_df.set_index('model', inplace=True)
+
+def compare_models(csv_files: Dict[str, str],
+                   results_dir: str
+) -> Tuple[pd.DataFrame, Dict[str, Any]]:
+    dfs = []
+    for label, path in csv_files.items():
+        df = pd.read_csv(path)
+        df = df.rename(columns={
+            'model_type': 'model',
+            'avg_test_sharpe': 'sharpe',
+            'avg_test_mse':    'mse',
+            'avg_test_sortino':'sortino',
+            'avg_test_hit':    'hit_rate'
+        })[['model','sharpe','mse','sortino','hit_rate']]
+        df['scenario'] = label
+        dfs.append(df)
+
+    combined = pd.concat(dfs, ignore_index=True)
+    summary_df = combined.set_index(['scenario', 'model'])
 
     comparisons = {}
-    # Rank models by each metric
-    comparisons['rankings'] = {metric: summary_df[metric].sort_values(ascending=(metric != 'Sharpe')).index.tolist() for metric in summary_df.columns}
-    percentage_improvement = {}
-    # Compute percentage improvement of best vs second best model for each metric
-    for metric in summary_df.columns:
-        values = summary_df[metric]
-        if metric == 'sharpe':
-            best, second = values.nlargest(2).values
-            pct = (second - best) / abs(second) * 100
-        else:
-            best, second = values.nsmallest(2).values
-            pct = (second -  best) / abs(second) * 100
-
-        percentage_improvement[metric] = pct
-    comparisons['percentage_improvement'] = percentage_improvement
-
-    # Statistical tests
+    rankings = {}
+    pct_improve = {}
     stats_res = {}
-    # Paired t-test on Sharpe between best two models: tests whether the mean Sharpe ratios for the two models are
-    # significantly different
-    sharpe_values = summary_df['Sharpe'].values
-    if len(sharpe_values) >= 2:
-        top2 = np.argsort(-sharpe_values)[:2]
-        t_stat, p_value = stats.ttest_rel(sharpe_values[top2[0]], sharpe_values[top2[1]])
-        stats_res['paired_t_sharpe'] = p_value
-    # ANOVA on mse across all models: tests whether the mean mse across models are significantly different
-    mse_values = summary_df['MSE'].values
-    if len(mse_values) >= 3:
-        f_stat_, p_value = stats.f_oneway(*[[v] for v in mse_values])
-        stats_res['anova_mse'] = p_value
-    # Kruskal-Wallis test on Sortino ratio: tests whether the mean Sortino ratios across models are
-    # significantly different
-    sortino_values = summary_df['Sortino'].values
-    if len(sortino_values) >= 3:
-        h_stat_, p_value = stats.kruskal(*[[v] for v in sortino_values])
-        stats_res['kruskal_sortino'] = p_value
-    # Friedman test on hit rate: tests whether the median hit rates across models are
-    # significantly different
-    hit_values = summary_df['HitRate'].values
-    if len(hit_values) >= 2:
-        chi2, p_value = stats.friedmanchisquare(*[[v] for v in hit_values])
-        stats_res['friedman_hitrate'] = p_value
 
+    for scenario, grp in summary_df.groupby(level=0):
+        df_sc = grp.droplevel(0)
+        rankings[scenario] = {
+            metric: df_sc[metric]
+            .sort_values(ascending=(metric != 'sharpe'))
+            .index
+            .tolist()
+            for metric in df_sc.columns
+        }
+        # Percentage improvement best vs second best
+        imps = {}
+        for metric in df_sc.columns:
+            vals = df_sc[metric]
+            if metric == 'sharpe':
+                best, second = vals.nlargest(2).values
+                imps[metric] = (second - best) / abs(second) * 100
+            else:
+                best, second = vals.nsmallest(2).values
+                imps[metric] = (second - best) / abs(second) * 100
+        pct_improve[scenario] = imps
+
+        res = {}
+        # Paired t-test on Sharpe between 2 best models
+        if len(df_sc) >= 2:
+            top2 = np.argsort(-df_sc['sharpe'].values)[:2]
+            t, p = stats.ttest_rel(
+                df_sc['sharpe'].values[top2[0]],
+                df_sc['sharpe'].values[top2[1]]
+            )
+            res['paired_t_sharpe'] = p
+        # Anova on mse
+        if len(df_sc) >= 3:
+            f, p = stats.f_oneway(*[[v] for v in df_sc['mse'].values])
+            res['anova_mse'] = p
+        # Kruskal on Sortino
+        if len(df_sc) >= 3:
+            h, p = stats.kruskal(*[[v] for v in df_sc['sortino'].values])
+            res['kruskal_sortino'] = p
+        # Friedman on hit rate
+        if len(df_sc) >= 2:
+            chi2, p = stats.friedmanchisquare(*[[v] for v in df_sc['hit_rate'].values])
+            res['friedman_hitrate'] = p
+
+        stats_res[scenario] = res
+
+        # 3) Plot per metric
+        os.makedirs(results_dir, exist_ok=True)
+        for metric in df_sc.columns:
+            plt.figure()
+            df_sc[metric].plot.bar(title=f"{scenario}: {metric} by model")
+            plt.ylabel(metric)
+            plt.tight_layout()
+            plt.savefig(os.path.join(results_dir, f"{scenario}_{metric}_bar.png"))
+            plt.close()
+
+    comparisons['rankings'] = rankings
+    comparisons['percentage_improvement'] = pct_improve
     comparisons['stats_res'] = stats_res
 
-    # Plots
-    for metric in summary_df.columns:
-        plt.figure()
-        summary_df[metric].plot(kind='bar', title=f'{metric} by model')
-        plt.ylabel(metric)
-        plt.tight_layout()
-        plt.savefig(os.path.join(results_dir, f'{metric.lower()}_bar.png'))
-        plt.close()
+    # 4) Cross-scenario paired-t tests for comparison between autoencoder on and off
+    if len(csv_files) == 2:
+        scen = list(csv_files.keys())
+        a, b = scen
+        df_a = summary_df.loc[a]
+        df_b = summary_df.loc[b]
+        common = df_a.index.intersection(df_b.index)
+        inter = {}
+        for metric in ['sharpe', 'mse', 'sortino', 'hit_rate']:
+            t, p = stats.ttest_rel(df_b.loc[common, metric],
+                                   df_a.loc[common, metric])
+            inter[f'ttest_{metric}_{b}_vs_{a}'] = p
+        comparisons['scenario_paired_t_tests'] = inter
 
-    # Scatter matrix of metrics
-    plt.figure()
-    pd.plotting.scatter_matrix(summary_df, diagonal='kde', alpha=0.7)
-    plt.suptitle('Pairwise metric scatter matrix')
-    plt.tight_layout()
-    plt.savefig(os.path.join(results_dir, 'metric_scatter_matrix.png'))
-    plt.close()
+        # Combined scatter matrix
+        plt.figure()
+        pd.plotting.scatter_matrix(
+            combined.pivot(index='model', columns='scenario')[['sharpe', 'mse', 'sortino', 'hit_rate']],
+            diagonal='kde', alpha=0.7)
+        plt.suptitle('Metrics: AE_off vs AE_on')
+        plt.tight_layout()
+        plt.savefig(os.path.join(results_dir, 'scenario_scatter_matrix.png'))
+        plt.close()
 
     return summary_df, comparisons
