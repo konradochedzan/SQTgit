@@ -321,7 +321,10 @@ def sp500_training_pipeline(
     device: str = 'cuda' if torch.cuda.is_available() else 'cpu',
     random_seed: int = 42,
     plot_results: bool = True,
-    do_print = True
+    do_print = True,
+    plot_dir: str = "results_plots",
+    plt_show = False
+
 ) -> Dict[str, Any]:
     """Rolling / expanding‑window S&P‑500 forecast pipeline plus TCN support."""
 
@@ -590,7 +593,9 @@ def sp500_training_pipeline(
             ax.grid(True, alpha=0.3)
         
         plt.tight_layout()
-        plt.show()
+        plt.savefig(os.path.join(plot_dir, "folds_predictions_vs_actual.png")) 
+        if plt_show:
+            plt.show()
         
         # Overall performance plot
         if len(results['all_train_dates']) > 0:
@@ -643,7 +648,9 @@ def sp500_training_pipeline(
             plt.grid(True, alpha=0.3)
             plt.xticks(rotation=45)
             plt.tight_layout()
-            plt.show()
+            plt.savefig(os.path.join(plot_dir, "overall_performance.png"))
+            if plt_show:
+                plt.show()
     
     return results
 

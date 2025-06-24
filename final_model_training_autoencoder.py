@@ -49,7 +49,7 @@ FIXED_PARAMS = {
     'batch_size': 128,
     'device': 'cpu',
     'plot_results': True,
-    'do_print': True
+    'do_print': False
 }
 
 df = pd.read_csv('data_non_std.csv', parse_dates=['Unnamed: 0'])
@@ -61,7 +61,7 @@ tbill3m = df['tbill3m'].values.astype(np.float32)
 
 out_dir_models = Path("models_autoencoder")
 out_dir_models.mkdir(parents=True, exist_ok=True)
-"""
+
 for model_type, (model_class, model_kwargs) in all_models_with_kwargs.items():
     print(f"Training {model_type} model...")
     results = sp500_training_pipeline(
@@ -84,18 +84,3 @@ for model_type, (model_class, model_kwargs) in all_models_with_kwargs.items():
         csv_path     = f"results_autoencoder/{model_type}_predictions.csv",
     )
     print(f"{model_type} model training complete. Results saved.")
-"""
-results = sp500_training_pipeline(
-        X            = features,
-        y            = target,
-        dates        = dates,
-        tbill3m      = tbill3m,
-        model_class  = TemporalConvNet,
-        model_type   = 'temporalconvnet',
-        model_kwargs =  {
-            'num_channels': [32, 64, 32],
-            'kernel_size': 5,
-            'dropout': 0.1
-        },
-        **FIXED_PARAMS,
-    )
