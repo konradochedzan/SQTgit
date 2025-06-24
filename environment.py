@@ -20,7 +20,7 @@ from TM_models import TemporalConvNet, TemporalFusionTransformer, TemporalFusion
 from Simple_models import SimpleConvolutional, SimpleFeedForward, SimpleLSTM, SimpleTransformer
 import itertools
 warnings.filterwarnings('ignore')
-
+import joblib
 # Fixed parameters for architecture selection
 FIXED_PARAMS = {
     'window_strategy': 'rolling',
@@ -85,7 +85,7 @@ ARCHITECTURE_GRID = {
     'CNN': {
         'class': SimpleConvolutional,
         'grid': {
-            'num_channels': [[32, 64, 32], [32, 64, 64, 32], [32, 64, 128, 64, 32]],
+            'num_channels': [[32, 64, 32], [32, 64, 64, 32], [48,72,72,48]],
             'kernel_size': [5],
             'dropout': [0.1],
             'seq_length': [24]
@@ -850,8 +850,8 @@ def select_best_architectures(
         y: np.ndarray,
         dates: pd.DatetimeIndex,
         tbill3m: np.ndarray,
-        results_dir :str
-        file_path: str = 'best_architectures.pickle',
+        results_dir :str,
+        file_path: str = 'best_architectures.pickle'
 ) -> pd.DataFrame:
     """Find best architecture for each model"""
     results = []
