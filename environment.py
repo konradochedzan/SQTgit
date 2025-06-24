@@ -419,8 +419,8 @@ def sp500_training_pipeline(
         # ----------- training loop -------------------------------
         if do_print:
             print("Training final model…")
-            final_epochs = epochs // 2 if walk_forward_cv else epochs
-            for ep in range(final_epochs):
+        final_epochs = epochs // 2 if walk_forward_cv else epochs
+        for ep in range(final_epochs):
                 loss = train_model_epoch(model, train_loader, criterion, optimizer, scheduler=scheduler,
                                         model_type=model_type, device=device)
                 if (ep + 1) % 20 == 0:

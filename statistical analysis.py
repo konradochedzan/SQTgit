@@ -17,7 +17,7 @@ def diebold_mariano(
     alternative: str = "two-sided",
     small_sample: bool = True,
 ):
-     # ------------------------------------------------------------------ checks
+    # ------------------------------------------------------------------ checks
     e1 = np.asarray(errors1, dtype=float).ravel()
     e2 = np.asarray(errors2, dtype=float).ravel()
     if e1.shape != e2.shape:
@@ -31,10 +31,22 @@ def diebold_mariano(
     d_mean = d.mean()
 
     # ---------------------- HAC variance: Newey–West truncation lag = h-1
-    gamma = np.array(
-        [np.dot(d[: T - k], d[k:]) / T for k in range(h)], dtype=float
-    )
+    gamma = np.zeros(h)
+    for k in range(h):
+        if k == 0:
+            # Variance (lag 0)
+            gamma[k] = np.mean((d - d_mean) ** 2)
+        else:
+            # Autocovariances (lag k)
+            gamma[k] = np.mean((d[:-k] - d_mean) * (d[k:] - d_mean))
+    
     var_d = gamma[0] + 2.0 * gamma[1:].sum()
+    
+    # ADDITIONAL FIX: Check for near-zero variance
+    if var_d <= 1e-15:
+        # If variance is essentially zero, the losses are identical
+        return 0.0, 1.0
+    
     dm_stat = d_mean / np.sqrt(var_d / T)
 
     # -------------------------------------------- small-sample HLN correction
@@ -136,6 +148,8 @@ print(metrics_df)
 # Optionally save:
 metrics_df.to_csv("model_comparison_metrics.csv")
 
+
+
 # ------------------------------------------------------------------------
 # 6. DIEBOLD–MARIANO PAIR-WISE TESTS
 # ------------------------------------------------------------------------
@@ -144,7 +158,7 @@ def dm_matrix(
     horizon: int       = 1,
     power: int | float = 2,
     alternative: str   = "two-sided",
-    small_sample: bool = True,
+    small_sample: bool = False,
 ) -> pd.DataFrame:
     """
     Return symmetric matrix of Diebold–Mariano p-values for model pairs.
@@ -190,3 +204,8 @@ print(dm_pvals)
 
 # Optionally save the table
 dm_pvals.to_csv("model_dm_pvalues.csv")
+
+# ADDITIONAL DEBUGGING: Print some statistics
+print("\n==== Debugging Information ====")
+for model_name, err in errors.items():
+    print(f"{model_name}: mean={err.mean():.6f}, std={err.std():.6f}, n={len(err)}")
