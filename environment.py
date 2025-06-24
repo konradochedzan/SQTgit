@@ -23,21 +23,22 @@ from saving import save_model, save_predictions
 import itertools
 warnings.filterwarnings('ignore')
 import joblib
+
 # Fixed parameters for architecture selection
-FIXED_PARAMS = {
+PARAMS = {
     'window_strategy': 'rolling',
     'train_window_years': 3,
     'test_window_years': 1,
-    'use_autoencoder': True,
     'encoding_dim': 10,
     'seq_length': 24,
     'epochs': 120,
     'lr': 0.0001,
     'batch_size': 128,
     'device': 'cuda',
-    'plot_results': False,
+    'plot_results': True,
     'do_print': False
 }
+PARAMS.setdefault('use_autoencoder', True)
 
 # Different architectures for each model
 ARCHITECTURE_GRID = {
@@ -321,7 +322,10 @@ def sp500_training_pipeline(
     device: str = 'cuda' if torch.cuda.is_available() else 'cpu',
     random_seed: int = 42,
     plot_results: bool = True,
-    do_print = True
+    do_print = True,
+    plot_dir: str = "results_plots",
+    plt_show = False
+
 ) -> Dict[str, Any]:
     """Rolling / expanding‑window S&P‑500 forecast pipeline plus TCN support."""
 
@@ -590,7 +594,11 @@ def sp500_training_pipeline(
             ax.grid(True, alpha=0.3)
         
         plt.tight_layout()
-        plt.show()
+        plot_dir = Path(plot_dir)
+        plot_dir.mkdir(parents=True, exist_ok=True)
+        plt.savefig(os.path.join(plot_dir, "folds_predictions_vs_actual.png")) 
+        if plt_show:
+            plt.show()
         
         # Overall performance plot
         if len(results['all_train_dates']) > 0:
@@ -643,7 +651,9 @@ def sp500_training_pipeline(
             plt.grid(True, alpha=0.3)
             plt.xticks(rotation=45)
             plt.tight_layout()
-            plt.show()
+            plt.savefig(os.path.join(plot_dir, "overall_performance.png"))
+            if plt_show:
+                plt.show()
     
     return results
 
@@ -856,7 +866,7 @@ def select_best_architectures(
 ) -> pd.DataFrame:
     """Find best architecture for each model"""
     results = []
-    if FIXED_PARAMS['use_autoencoder']:
+    if PARAMS['use_autoencoder']:
         out_dir_models = Path('model_autoencoder_on')
         print('Autoencoder turned on')
     else:
@@ -890,7 +900,7 @@ def select_best_architectures(
                     model_kwargs=params,
                     model_type = model_type.lower(),
                     tbill3m = tbill3m,
-                    **FIXED_PARAMS
+                    **PARAMS
                 )
 
                 mse = res['overall_metrics']['avg_test_mse']
