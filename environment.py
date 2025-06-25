@@ -23,21 +23,22 @@ from saving import save_model, save_predictions
 import itertools
 warnings.filterwarnings('ignore')
 import joblib
+
 # Fixed parameters for architecture selection
-FIXED_PARAMS = {
+PARAMS = {
     'window_strategy': 'rolling',
     'train_window_years': 3,
     'test_window_years': 1,
-    'use_autoencoder': True,
     'encoding_dim': 10,
     'seq_length': 24,
     'epochs': 120,
     'lr': 0.0001,
     'batch_size': 128,
     'device': 'cuda',
-    'plot_results': False,
+    'plot_results': True,
     'do_print': False
 }
+PARAMS.setdefault('use_autoencoder', True)
 
 # Different architectures for each model
 ARCHITECTURE_GRID = {
@@ -870,7 +871,7 @@ def select_best_architectures(
 ) -> pd.DataFrame:
     """Find best architecture for each model"""
     results = []
-    if FIXED_PARAMS['use_autoencoder']:
+    if PARAMS['use_autoencoder']:
         out_dir_models = Path('model_autoencoder_on')
         print('Autoencoder turned on')
     else:
@@ -904,7 +905,7 @@ def select_best_architectures(
                     model_kwargs=params,
                     model_type = model_type.lower(),
                     tbill3m = tbill3m,
-                    **FIXED_PARAMS
+                    **PARAMS
                 )
 
                 mse = res['overall_metrics']['avg_test_mse']
