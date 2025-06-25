@@ -71,8 +71,8 @@ def diebold_mariano(
 # 1. LOAD ACTUAL RETURNS
 # ------------------------------------------------------------------------
 data = (
-    pd.read_csv("data_non_std.csv", parse_dates=["Unnamed: 0"])
-      .rename(columns={"Unnamed: 0": "Date"})
+    pd.read_csv("data_non_std.csv", parse_dates=["date"])
+      .rename(columns={"date": "Date"})
       .set_index("Date")
 )
 y_true = data["returns"]                       # full series
@@ -80,7 +80,7 @@ y_true = data["returns"]                       # full series
 # ------------------------------------------------------------------------
 # 2. GATHER PREDICTION FILES
 # ------------------------------------------------------------------------
-pred_dir = Path("results_autoencoder")  # directory with prediction CSVs
+pred_dir = Path("results_no_autoencoder")  # directory with prediction CSVs
 csv_paths = sorted(pred_dir.glob("*_predictions.csv"))   # one per model
 
 if not csv_paths:
@@ -172,9 +172,10 @@ def dm_matrix(
         # Step 1: align on shared dates and drop missing values
         e1, e2 = err_dict[m1].align(err_dict[m2], join="inner")
 
-        e1 = e1.dropna()
-        e2 = e2.dropna()
-
+        #e1 = e1.dropna()
+        #e2 = e2.dropna()
+        d = np.abs(e1.values) ** power - np.abs(e2.values) ** power
+        print(f"{m1} vs {m2}: d_mean={d.mean()}, d_std={d.std()}")
         # Step 2: check length
         if len(e1) < horizon + 2:
             print(f"Skipping {m1} vs {m2} (too short: {len(e1)} observations)")
@@ -194,7 +195,8 @@ def dm_matrix(
         # Step 4: store symmetric p-value
         dm_p.loc[m1, m2] = dm_p.loc[m2, m1] = p
 
-    return dm_p.round(4)
+    return dm_p
+
 
 
 dm_pvals = dm_matrix(errors, horizon=1, power=2)

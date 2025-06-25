@@ -8,15 +8,15 @@ from Simple_models import SimpleConvolutional, SimpleFeedForward, SimpleLSTM, Si
 from saving import save_model, load_model, save_predictions, load_predictions
 
 all_models_with_kwargs = {
-    'feedforward': [SimpleFeedForward, {
-        'hidden_dim': 300,
-        'dropout': 0.1}],
     'temporalconvnet': [TemporalConvNet, {
         'num_channels': [32, 64, 32],
         'kernel_size': 5,
         'dropout': 0.1
-    }]
-    , 'cnn': [SimpleConvolutional, {
+    }],
+        'feedforward': [SimpleFeedForward, {
+        'hidden_dim': 300,
+        'dropout': 0.1}],
+     'cnn': [SimpleConvolutional, {
         'num_channels': [32, 64, 32],
         'kernel_size': 5,
         'dropout': 0.1
