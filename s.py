@@ -6,381 +6,169 @@ from TM_models import TemporalConvNet, TemporalFusionTransformer
 from Simple_models import SimpleConvolutional, SimpleFeedForward, SimpleLSTM, SimpleTransformer
 from saving import save_predictions, save_model, load_model, load_predictions
 
+import pandas as pd
+import ast
+import ast
+import json
+import re
+from pathlib import Path
+import pandas as pd
+import ast
+import numpy as np
 
-df = pd.read_csv('data_non_std.csv', parse_dates=['date'])
-df.rename(columns={'date': 'Date'}, inplace=True)
-features = df.drop(columns=['returns', 'Date']).values.astype(np.float32)
-target = df['returns'].values.astype(np.float32)
-dates = pd.to_datetime(df['Date'])
-tbill3m = df['tbill3m'].values.astype(np.float32)
+df = pd.read_csv('trained_model_summary_results.csv')
 
+import re
+dictionary = {}
+# for k in range(df.shape[0]):
 
-# AUTOENCODER
-
-results_feedforward_ae = sp500_training_pipeline(
-    X=features,
-    y=target,
-    dates=dates,
-    tbill3m=tbill3m,
-    model_class  = SimpleFeedForward,
-    model_type   = 'feedforward', 
-    model_kwargs = {
-        'hidden_dim': 140,
-        'dropout': 0.1
-    },
-    window_strategy='rolling',
-    train_window_years=3,
-    test_window_years=1,
-    use_autoencoder=True,
-    encoding_dim=10,
-    seq_length=24,
-    ar_lags=30,
-    batch_size=128,
-    epochs=120,
-    lr=0.001,
-    plot_results=True,
-    do_print=True,
-    alpha=0.0,
-    l1_ratio=0.0,
-    plt_show = False
-)
-
-save_predictions(
-    dates=results_feedforward_ae["all_test_dates"],
-    predictions=results_feedforward_ae["all_test_predictions"],
-    csv_path="results_autoencoder/feedforward_test_predictions.csv"
-)
-
-save_predictions(
-    dates=results_feedforward_ae["all_train_dates"],
-    predictions=results_feedforward_ae["all_train_predictions"],
-    csv_path="results_autoencoder/feedforward_train_predictions.csv"
-)
-
-for k, fold_model in enumerate(results_feedforward_ae["models"], 1):
-    save_model(
-        fold_model,
-        f"models_autoencoder/feedforward_fold_{k:02d}.joblib"
-    )
-
-results_lstm_ae = sp500_training_pipeline(    X=features,
-    X=features,
-    y=target,
-    dates=dates,
-    tbill3m=tbill3m,
-    model_class  = SimpleLSTM,
-    model_type   = 'lstm', 
-    model_kwargs = {'hidden_dim': 200,
-        'dropout': 0.1,
-        'num_layers': 3
-    },
-    window_strategy='rolling',
-    train_window_years=3,
-    test_window_years=1,
-    use_autoencoder=False,
-    encoding_dim=10,
-    seq_length=24,
-    ar_lags=30,
-    batch_size=128,
-    epochs=120,
-    lr=0.001,
-    plot_results=True,
-    do_print=True,
-    alpha=0.0,
-    l1_ratio=0.0,
-    plt_show = False
-)
-
-save_predictions(
-    dates=results_lstm_ae["all_test_dates"],
-    predictions=results_lstm_ae["all_test_predictions"],
-    csv_path="results_autoencoder/lstm_test_predictions.csv"
-) 
-save_predictions(
-    dates=results_lstm_ae["all_train_dates"],
-    predictions=results_lstm_ae["all_train_predictions"],
-    csv_path="results_autoencoder/lstm_train_predictions.csv"
-)
-for k, fold_model in enumerate(results_lstm_ae["models"], 1):
-    save_model(
-        fold_model,
-        f"models_autoencoder/lstm_fold_{k:02d}.joblib"
-    ) 
-
-results_transformer_ae = sp500_training_pipeline(
-    X=features,
-    y=target,
-    dates=dates,
-    tbill3m=tbill3m,
-    model_class  = SimpleTransformer,
-    model_type   = 'transformer', 
-    model_kwargs = {
-        'model_dim': 128,
-        'num_layers': 2,
-        'dropout': 0.1,
-        'nhead': 8,},
-    window_strategy='rolling',
-    train_window_years=3,
-    test_window_years=1,
-    use_autoencoder=False,
-    encoding_dim=10,
-    seq_length=24,
-    ar_lags=30,
-    batch_size=128,
-    epochs=120,
-    lr=0.001,
-    plot_results=True,
-    do_print=True,
-    alpha=0.0,
-    l1_ratio=0.0,
-    plt_show = False)
+#     results_str = df.loc[k, 'results']
+#     model_name = df.loc[k, 'model']
+#     autoencoder = df.loc[k, 'use_autoencoder']
+#     match = re.search(r"avg_test_mse':\s*np\.float64\(([^)]+)\),", results_str)
+#     avg_test_mse = match.group(1)
+#     avg_test_mse = float(avg_test_mse)
+#     dictionary[model_name + str(autoencoder)] = {'avg_test_mse':avg_test_mse}
 
 
-save_predictions(
-    dates=results_transformer_ae["all_test_dates"],
-    predictions=results_transformer_ae["all_test_predictions"],
-    csv_path="results_autoencoder/transformer_test_predictions.csv"
-) 
-save_predictions(
-    dates=results_transformer_ae["all_train_dates"],
-    predictions=results_transformer_ae["all_train_predictions"],
-    csv_path="results_autoencoder/transformer_train_predictions.csv"
-)
-for k, fold_model in enumerate(results_transformer_ae["models"], 1):
-    save_model(
-        fold_model,
-        f"models_autoencoder/transformer_fold_{k:02d}.joblib"
-    ) 
+# print(dictionary)
 
+for k in range(df.shape[0]):
+    results_str = df.loc[k, 'results']
+    model_name = df.loc[k, 'model']
+    autoencoder = df.loc[k, 'use_autoencoder']
+    
+    # Extract avg_train_mse
+    match = re.search(r"'avg_train_mse':\s*np\.float64\(([^)]+)\),", results_str)
+    avg_train_mse = float(match.group(1))
+    
+    # Extract avg_test_mse
+    match = re.search(r"'avg_test_mse':\s*np\.float64\(([^)]+)\),", results_str)
+    avg_test_mse = float(match.group(1))
+    
+    # Extract avg_train_sharpe
+    match = re.search(r"'avg_train_sharpe':\s*np\.float64\(([^)]+)\),", results_str)
+    avg_train_sharpe = float(match.group(1))
+    
+    # Extract avg_test_sharpe
+    match = re.search(r"'avg_test_sharpe':\s*np\.float64\(([^)]+)\),", results_str)
+    avg_test_sharpe = float(match.group(1))
+    
+    # Extract std_train_mse
+    match = re.search(r"'std_train_mse':\s*np\.float64\(([^)]+)\),", results_str)
+    std_train_mse = float(match.group(1))
+    
+    # Extract std_test_mse
+    match = re.search(r"'std_test_mse':\s*np\.float64\(([^)]+)\),", results_str)
+    std_test_mse = float(match.group(1))
+    
+    # Extract std_train_sharpe
+    match = re.search(r"'std_train_sharpe':\s*np\.float64\(([^)]+)\),", results_str)
+    std_train_sharpe = float(match.group(1))
+    
+    # Extract std_test_sharpe
+    match = re.search(r"'std_test_sharpe':\s*np\.float64\(([^)]+)\),", results_str)
+    std_test_sharpe = float(match.group(1))
+    
+    # Extract avg_train_mae
+    match = re.search(r"'avg_train_mae':\s*np\.float64\(([^)]+)\),", results_str)
+    avg_train_mae = float(match.group(1))
+    
+    # Extract avg_test_mae
+    match = re.search(r"'avg_test_mae':\s*np\.float64\(([^)]+)\),", results_str)
+    avg_test_mae = float(match.group(1))
+    
+    # Extract std_train_mae
+    match = re.search(r"'std_train_mae':\s*np\.float64\(([^)]+)\),", results_str)
+    std_train_mae = float(match.group(1))
+    
+    # Extract std_test_mae
+    match = re.search(r"'std_test_mae':\s*np\.float64\(([^)]+)\),", results_str)
+    std_test_mae = float(match.group(1))
+    
+    # Extract avg_train_r2
+    match = re.search(r"'avg_train_r2':\s*np\.float64\(([^)]+)\),", results_str)
+    avg_train_r2 = float(match.group(1))
+    
+    # Extract avg_test_r2
+    match = re.search(r"'avg_test_r2':\s*np\.float64\(([^)]+)\),", results_str)
+    avg_test_r2 = float(match.group(1))
+    
+    # Extract std_train_r2
+    match = re.search(r"'std_train_r2':\s*np\.float64\(([^)]+)\),", results_str)
+    std_train_r2 = float(match.group(1))
+    
+    # Extract std_test_r2
+    match = re.search(r"'std_test_r2':\s*np\.float64\(([^)]+)\),", results_str)
+    std_test_r2 = float(match.group(1))
+    
+    # Extract avg_train_sortino
+    match = re.search(r"'avg_train_sortino':\s*np\.float64\(([^)]+)\),", results_str)
+    avg_train_sortino = float(match.group(1))
+    
+    # Extract avg_test_sortino
+    match = re.search(r"'avg_test_sortino':\s*np\.float64\(([^)]+)\),", results_str)
+    avg_test_sortino = float(match.group(1))
+    
+    # Extract std_train_sortino
+    match = re.search(r"'std_train_sortino':\s*np\.float64\(([^)]+)\),", results_str)
+    std_train_sortino = float(match.group(1))
+    
+    # Extract std_test_sortino
+    match = re.search(r"'std_test_sortino':\s*np\.float64\(([^)]+)\),", results_str)
+    std_test_sortino = float(match.group(1))
+    
+    # Extract avg_train_hit
+    match = re.search(r"'avg_train_hit':\s*np\.float64\(([^)]+)\),", results_str)
+    avg_train_hit = float(match.group(1))
+    
+    # Extract avg_test_hit
+    match = re.search(r"'avg_test_hit':\s*np\.float64\(([^)]+)\),", results_str)
+    avg_test_hit = float(match.group(1))
+    
+    # Extract std_train_hit
+    match = re.search(r"'std_train_hit':\s*np\.float64\(([^)]+)\),", results_str)
+    std_train_hit = float(match.group(1))
+    
+    # Extract std_test_hit
+    match = re.search(r"'std_test_hit':\s*np\.float64\(([^)]+)\)", results_str)  # Note: no comma at the end for the last one
+    std_test_hit = float(match.group(1))
+    
+    dictionary[model_name + str(autoencoder)] = {
+        'avg_train_mse': avg_train_mse,
+        'avg_test_mse': avg_test_mse,
+        'avg_train_sharpe': avg_train_sharpe,
+        'avg_test_sharpe': avg_test_sharpe,
+        'std_train_mse': std_train_mse,
+        'std_test_mse': std_test_mse,
+        'std_train_sharpe': std_train_sharpe,
+        'std_test_sharpe': std_test_sharpe,
+        'avg_train_mae': avg_train_mae,
+        'avg_test_mae': avg_test_mae,
+        'std_train_mae': std_train_mae,
+        'std_test_mae': std_test_mae,
+        'avg_train_r2': avg_train_r2,
+        'avg_test_r2': avg_test_r2,
+        'std_train_r2': std_train_r2,
+        'std_test_r2': std_test_r2,
+        'avg_train_sortino': avg_train_sortino,
+        'avg_test_sortino': avg_test_sortino,
+        'std_train_sortino': std_train_sortino,
+        'std_test_sortino': std_test_sortino,
+        'avg_train_hit': avg_train_hit,
+        'avg_test_hit': avg_test_hit,
+        'std_train_hit': std_train_hit,
+        'std_test_hit': std_test_hit
+    }
+    
+df_results = pd.DataFrame.from_dict(dictionary, orient='index')
 
-results_convolutional_ae = sp500_training_pipeline(
-    X=features,
-    y=target,
-    dates=dates,
-    tbill3m=tbill3m,
-    model_class  = SimpleConvolutional,
-    model_type   = 'convolutional',
-    model_kwargs = {'num_channels':[32,64,32],
-        'kernel_size': 5,
-        'dropout': 0.1,
-        'seq_length': 24
-    },
-    window_strategy='rolling',
-    train_window_years=3,
-    test_window_years=1,
-    use_autoencoder=True,
-    encoding_dim=10,
-    seq_length=24,
-    ar_lags=30,
-    batch_size=128,
-    epochs=120,
-    lr=0.001,
-    plot_results=True,
-    do_print=True,
-    alpha=0.0,
-    l1_ratio=0.0,
-    plt_show = False
-)
+# Reset index to make the model names a regular column
+df_results.reset_index(inplace=True)
+df_results.rename(columns={'index': 'model'}, inplace=True)
 
-save_predictions(
-    dates=results_convolutional_ae["all_test_dates"],
-    predictions=results_transformer_ae["all_test_predictions"],
-    csv_path="results_autoencoder/cnn_test_predictions.csv"
-) 
-save_predictions(
-    dates=results_convolutional_ae["all_train_dates"],
-    predictions=results_convolutional_ae["all_train_predictions"],
-    csv_path="results_autoencoder/cnn_train_predictions.csv"
-)
-for k, fold_model in enumerate(results_convolutional_ae["models"], 1):
-    save_model(
-        fold_model,
-        f"models_autoencoder/cnn_fold_{k:02d}.joblib"
-    ) 
+# Save to CSV
+df_results.to_csv('model_results.csv', index=False)
 
-
-
-# NO AUTOENCODER
-
-
-results_feedforward_nae = sp500_training_pipeline(
-    X=features,
-    y=target,
-    dates=dates,
-    tbill3m=tbill3m,
-    model_class  = SimpleFeedForward,
-    model_type   = 'feedforward', 
-    model_kwargs = {
-        'hidden_dim': 140,
-        'dropout': 0.1
-    },
-    window_strategy='rolling',
-    train_window_years=3,
-    test_window_years=1,
-    use_autoencoder=False,
-    encoding_dim=10,
-    seq_length=24,
-    ar_lags=30,
-    batch_size=128,
-    epochs=120,
-    lr=0.001,
-    plot_results=True,
-    do_print=True,
-    alpha=0.0,
-    l1_ratio=0.0,
-    plt_show = False
-)
-
-save_predictions(
-    dates=results_feedforward_nae["all_test_dates"],
-    predictions=results_feedforward_nae["all_test_predictions"],
-    csv_path="results_no_autoencoder/feedforward_test_predictions.csv"
-)
-
-save_predictions(
-    dates=results_feedforward_ae["all_train_dates"],
-    predictions=results_feedforward_ae["all_train_predictions"],
-    csv_path="results_no_autoencoder/feedforward_train_predictions.csv"
-)
-
-for k, fold_model in enumerate(results_feedforward_ae["models"], 1):
-    save_model(
-        fold_model,
-        f"models_autoencoder/feedforward_fold_{k:02d}.joblib"
-    )
-
-results_lstm_ae = sp500_training_pipeline(    X=features,
-    X=features,
-    y=target,
-    dates=dates,
-    tbill3m=tbill3m,
-    model_class  = SimpleLSTM,
-    model_type   = 'lstm', 
-    model_kwargs = {'hidden_dim': 200,
-        'dropout': 0.1,
-        'num_layers': 3
-    },
-    window_strategy='rolling',
-    train_window_years=3,
-    test_window_years=1,
-    use_autoencoder=False,
-    encoding_dim=10,
-    seq_length=24,
-    ar_lags=30,
-    batch_size=128,
-    epochs=120,
-    lr=0.001,
-    plot_results=True,
-    do_print=True,
-    alpha=0.0,
-    l1_ratio=0.0,
-    plt_show = False
-)
-
-save_predictions(
-    dates=results_lstm_ae["all_test_dates"],
-    predictions=results_lstm_ae["all_test_predictions"],
-    csv_path="results_autoencoder/lstm_test_predictions.csv"
-) 
-save_predictions(
-    dates=results_lstm_ae["all_train_dates"],
-    predictions=results_lstm_ae["all_train_predictions"],
-    csv_path="results_autoencoder/lstm_train_predictions.csv"
-)
-for k, fold_model in enumerate(results_lstm_ae["models"], 1):
-    save_model(
-        fold_model,
-        f"models_autoencoder/lstm_fold_{k:02d}.joblib"
-    ) 
-
-results_transformer_ae = sp500_training_pipeline(
-    X=features,
-    y=target,
-    dates=dates,
-    tbill3m=tbill3m,
-    model_class  = SimpleTransformer,
-    model_type   = 'transformer', 
-    model_kwargs = {
-        'model_dim': 128,
-        'num_layers': 2,
-        'dropout': 0.1,
-        'nhead': 8,},
-    window_strategy='rolling',
-    train_window_years=3,
-    test_window_years=1,
-    use_autoencoder=False,
-    encoding_dim=10,
-    seq_length=24,
-    ar_lags=30,
-    batch_size=128,
-    epochs=120,
-    lr=0.001,
-    plot_results=True,
-    do_print=True,
-    alpha=0.0,
-    l1_ratio=0.0,
-    plt_show = False)
-
-
-save_predictions(
-    dates=results_transformer_ae["all_test_dates"],
-    predictions=results_transformer_ae["all_test_predictions"],
-    csv_path="results_autoencoder/transformer_test_predictions.csv"
-) 
-save_predictions(
-    dates=results_transformer_ae["all_train_dates"],
-    predictions=results_transformer_ae["all_train_predictions"],
-    csv_path="results_autoencoder/transformer_train_predictions.csv"
-)
-for k, fold_model in enumerate(results_transformer_ae["models"], 1):
-    save_model(
-        fold_model,
-        f"models_autoencoder/transformer_fold_{k:02d}.joblib"
-    ) 
-
-
-results_convolutional_ae = sp500_training_pipeline(
-    X=features,
-    y=target,
-    dates=dates,
-    tbill3m=tbill3m,
-    model_class  = SimpleConvolutional,
-    model_type   = 'convolutional',
-    model_kwargs = {'num_channels':[32,64,32],
-        'kernel_size': 5,
-        'dropout': 0.1,
-        'seq_length': 24
-    },
-    window_strategy='rolling',
-    train_window_years=3,
-    test_window_years=1,
-    use_autoencoder=True,
-    encoding_dim=10,
-    seq_length=24,
-    ar_lags=30,
-    batch_size=128,
-    epochs=120,
-    lr=0.001,
-    plot_results=True,
-    do_print=True,
-    alpha=0.0,
-    l1_ratio=0.0,
-    plt_show = False
-)
-
-save_predictions(
-    dates=results_convolutional_ae["all_test_dates"],
-    predictions=results_transformer_ae["all_test_predictions"],
-    csv_path="results_autoencoder/cnn_test_predictions.csv"
-) 
-save_predictions(
-    dates=results_convolutional_ae["all_train_dates"],
-    predictions=results_convolutional_ae["all_train_predictions"],
-    csv_path="results_autoencoder/cnn_train_predictions.csv"
-)
-for k, fold_model in enumerate(results_convolutional_ae["models"], 1):
-    save_model(
-        fold_model,
-        f"models_autoencoder/cnn_fold_{k:02d}.joblib"
-    ) 
-
+print("Results saved to model_results.csv")
+print(df_results.head())

@@ -80,7 +80,7 @@ y_true = data["returns"]                       # full series
 # ------------------------------------------------------------------------
 # 2. GATHER PREDICTION FILES
 # ------------------------------------------------------------------------
-pred_dir = Path("results_no_autoencoder")  # directory with prediction CSVs
+pred_dir = Path("results_autoencoder")  # directory with prediction CSVs
 csv_paths = sorted(pred_dir.glob("*_predictions.csv"))   # one per model
 
 if not csv_paths:
@@ -175,7 +175,6 @@ def dm_matrix(
         #e1 = e1.dropna()
         #e2 = e2.dropna()
         d = np.abs(e1.values) ** power - np.abs(e2.values) ** power
-        print(f"{m1} vs {m2}: d_mean={d.mean()}, d_std={d.std()}")
         # Step 2: check length
         if len(e1) < horizon + 2:
             print(f"Skipping {m1} vs {m2} (too short: {len(e1)} observations)")
