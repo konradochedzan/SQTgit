@@ -38,19 +38,40 @@ def plot_real_vs_predictions(
         merged = pd.merge(real_df, pred_df, on=date_col, how="inner")
 
         # Plot
-        plt.figure(figsize=(12, 6))
-        plt.plot(merged[date_col], merged["real"], label="Real", color="black", linewidth=2)
-        plt.plot(merged[date_col], merged[model], label=f"Prediction ({model})", linestyle="--")
+        plt.figure(figsize=(13, 7))
+        real_line, = plt.plot(
+            merged[date_col], merged["real"], 
+            label="Real", color="black", linewidth=1.0
+        )
+        pred_line, = plt.plot(
+            merged[date_col], merged[model], 
+            label="Prediction", linestyle="--", linewidth=2
+        )
 
         # X-axis: only mark the beginning of each year
         years = merged[date_col].dt.year.unique()
         year_start_dates = [merged[merged[date_col].dt.year == y][date_col].iloc[0] for y in years]
-        plt.xticks(year_start_dates, [str(y) for y in years], rotation=45)
+        plt.xticks(
+            year_start_dates, 
+            [str(y) for y in years], 
+            rotation=45, 
+            fontsize=14, 
+            fontweight='bold'
+        )
+        plt.yticks(fontsize=14, fontweight='bold')
 
-        plt.title(f"{plot_title} - {model}")
-        plt.xlabel("Year")
-        plt.ylabel(y_label)
-        plt.legend()
+        plt.title(f"{plot_title} - {model}", fontsize=18, fontweight='bold')
+        plt.xlabel("Year", fontsize=15, fontweight='bold')
+        plt.ylabel(y_label, fontsize=15, fontweight='bold')
+        plt.legend(
+            [real_line, pred_line],
+            ["Real", "Prediction"],
+            fontsize=16,
+            frameon=True,
+            facecolor='white',
+            edgecolor='black',
+            loc='upper left'
+        )
         plt.tight_layout()
 
         # Save
@@ -62,7 +83,7 @@ def plot_real_vs_predictions(
 
 plot_real_vs_predictions(
     real_csv_path="data_non_std.csv",
-    model_names=['temporalfusiontransformer_nae', 'lstm_nae', 'feedforward_nae', 'transformer_nae', 'temporalconvnet_nae', 'cnn_nae'],
-    predictions_dir="results_no_autoencoder",
+    model_names=['temporalfusiontransformer', 'lstm', 'feedforward', 'transformer', 'temporalconvnet', 'cnn'],
+    predictions_dir="results_autoencoder",
     output_dir="plots"
 )
