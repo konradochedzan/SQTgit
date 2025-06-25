@@ -26,7 +26,7 @@ import joblib
 
 # Fixed parameters for architecture selection
 PARAMS = {
-    'window_strategy': 'rolling',
+    'window_strategy': 'expanding',
     'train_window_years': 3,
     'test_window_years': 1,
     'encoding_dim': 10,
@@ -36,7 +36,8 @@ PARAMS = {
     'batch_size': 128,
     'device': 'cuda',
     'plot_results': True,
-    'do_print': False
+    'do_print': False,
+    'use_autoencoder':True
 }
 PARAMS.setdefault('use_autoencoder', True)
 
@@ -601,7 +602,10 @@ def sp500_training_pipeline(
             ax.grid(True, alpha=0.3)
         
         plt.tight_layout()
-        plt.savefig(plot_dir / f"{plot_suffix}_folds_predictions_vs_actual.png")
+        if use_autoencoder:
+            plt.savefig(plot_dir / f"{plot_suffix}_folds_predictions_vs_actual_ae_on.png")
+        else:
+            plt.savefig(plot_dir / f"{plot_suffix}_folds_predictions_vs_actual_ae_off.png")
         if plt_show:
             plt.show()
         
@@ -656,7 +660,10 @@ def sp500_training_pipeline(
             plt.grid(True, alpha=0.3)
             plt.xticks(rotation=45)
             plt.tight_layout()
-            plt.savefig(plot_dir / f"{plot_suffix}_overall_performance.png")
+            if use_autoencoder:
+                plt.savefig(plot_dir / f"{plot_suffix}_overall_performance_ae_on.png")
+            else:
+                plt.savefig(plot_dir / f"{plot_suffix}_overall_performance_ae_off.png")
             if plt_show:
                 plt.show()
     
