@@ -37,8 +37,8 @@ os.makedirs(RESULTS_DIR, exist_ok=True)
 os.makedirs(MODELS_DIR, exist_ok=True)
 
 
-df = pd.read_csv('data_non_std.csv', parse_dates=['Unnamed: 0'])
-df.rename(columns={'Unnamed: 0': 'Date'}, inplace=True)
+df = pd.read_csv('data_non_std.csv', parse_dates=['date'])
+df.rename(columns={'date': 'Date'}, inplace=True)
 features = df.drop(columns=['returns', 'Date']).values.astype(np.float32)
 target = df['returns'].values.astype(np.float32)
 dates = pd.to_datetime(df['Date'])
@@ -68,11 +68,13 @@ out_dir.mkdir(exist_ok=True, parents=True)
 for use_ae in (False, True):
     PARAMS['use_autoencoder'] = use_ae
 
-    csv_file = (
-        'architecture_results_autoencoder_on.csv'
-        if use_ae else
-        'architecture_results_autoencoder_off.csv'
-    )
+    # csv_file = (
+    #     'architecture_results_autoencoder_on.csv'
+    #     if use_ae else
+    #     'architecture_results_autoencoder_off.csv'
+    # )
+    csv_file = 'architecture_results.csv'
+
     df = pd.read_csv(os.path.join(RESULTS_DIR, csv_file))
     for idx, row in df.iterrows():
         model_type = row['model_type']
@@ -110,4 +112,7 @@ for use_ae in (False, True):
             'params': model_kwargs,
             'results': results
         })
+
+all_results_df = pd.DataFrame(all_results)
+all_results_df.to_csv('trained_model_summary_results.csv')
 

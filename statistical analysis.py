@@ -1,7 +1,6 @@
 from pathlib import Path
 from itertools import combinations
 
-import numpy as np
 import pandas as pd
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from statsmodels.stats.stattools import durbin_watson, jarque_bera
