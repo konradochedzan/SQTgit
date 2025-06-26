@@ -16,7 +16,7 @@ import pandas as pd
 import ast
 import numpy as np
 
-df = pd.read_csv('trained_model_summary_results.csv')
+df = pd.read_csv('expanding/trained_model_summary_results.csv')
 
 import re
 dictionary = {}
@@ -168,7 +168,7 @@ df_results.reset_index(inplace=True)
 df_results.rename(columns={'index': 'model'}, inplace=True)
 
 # Save to CSV
-df_results.to_csv('model_results.csv', index=False)
+df_results.to_csv('expanding/model_results.csv', index=False)
 
 print("Results saved to model_results.csv")
 print(df_results.head())
