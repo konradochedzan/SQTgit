@@ -83,7 +83,7 @@ def plot_real_vs_predictions(
 
 plot_real_vs_predictions(
     real_csv_path="data_non_std.csv",
-    model_names=['tft_ex', 'lstm_ex', 'feedforward_ex', 'transformer_ex', 'tcn_ex', 'cnn_ex'],
-    predictions_dir="expanding/trained_outputs_ae",
+    model_names=['tft_ex_nae', 'lstm_ex_nae', 'feedforward_ex_nae', 'transformer_ex_nae', 'tcn_ex_nae', 'cnn_ex_nae'],
+    predictions_dir="expanding/trained_outputs_no_ae",
     output_dir="plots"
 )
