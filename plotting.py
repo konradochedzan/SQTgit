@@ -45,7 +45,7 @@ def plot_real_vs_predictions(
         )
         pred_line, = plt.plot(
             merged[date_col], merged[model], 
-            label="Prediction", linestyle="--", linewidth=2
+            label="Prediction", linestyle="--", linewidth=2, color="red"
         )
 
         # X-axis: only mark the beginning of each year
@@ -83,7 +83,7 @@ def plot_real_vs_predictions(
 
 plot_real_vs_predictions(
     real_csv_path="data_non_std.csv",
-    model_names=['temporalfusiontransformer', 'lstm', 'feedforward', 'transformer', 'temporalconvnet', 'cnn'],
-    predictions_dir="results_autoencoder",
+    model_names=['tft_ex', 'lstm_ex', 'feedforward_ex', 'transformer_ex', 'tcn_ex', 'cnn_ex'],
+    predictions_dir="expanding/trained_outputs_ae",
     output_dir="plots"
 )
